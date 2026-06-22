@@ -34,6 +34,7 @@ exports.participantsCsv = async (req, res) => {
       email: r.person?.email,
       role: r.role?.roleName,
       status: r.status,
+      participantCost: r.participantCost,
       whygoText: r.whygoText,
       assiginmentDateTime: r.assiginmentDateTime,
     }));
@@ -43,6 +44,7 @@ exports.participantsCsv = async (req, res) => {
       { key: "email", label: "Email" },
       { key: "role", label: "Role" },
       { key: "status", label: "Status" },
+      { key: "participantCost", label: "Participant Cost" },
       { key: "whygoText", label: "Why Go" },
       { key: "assiginmentDateTime", label: "Assignment Date" },
     ]);

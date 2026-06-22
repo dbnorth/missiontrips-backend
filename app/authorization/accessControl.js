@@ -28,6 +28,16 @@ export const parseActingOrganizationHeader = (req) => {
   return parseOrganizationScopeHeader(req);
 };
 
+/** Org IDs from trips the user leads (active Trip Leader assignments). */
+export const getTripLeaderOrgIds = (req) => [
+  ...new Set(
+    (req.user?.tripRoles || [])
+      .filter((r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "active")
+      .map((r) => Number(r.trip?.orgId))
+      .filter((id) => !Number.isNaN(id))
+  ),
+];
+
 /** Org IDs used to scope people lists (user org or admin-selected org). Returns "all" for system admin with no org scope. */
 export const peopleListOrgIds = (req) => {
   if (isSystemAdmin(req)) {
@@ -42,10 +52,11 @@ export const peopleListOrgIds = (req) => {
         .map((r) => Number(r.orgId))
     ),
   ];
-  if (!adminOrgIds.length) return null;
+  const candidateOrgIds = adminOrgIds.length ? adminOrgIds : getTripLeaderOrgIds(req);
+  if (!candidateOrgIds.length) return null;
   const scoped = parseOrganizationScopeHeader(req);
-  if (scoped != null && adminOrgIds.includes(scoped)) return [scoped];
-  if (adminOrgIds.length === 1) return adminOrgIds;
+  if (scoped != null && candidateOrgIds.includes(scoped)) return [scoped];
+  if (candidateOrgIds.length === 1) return candidateOrgIds;
   return null;
 };
 

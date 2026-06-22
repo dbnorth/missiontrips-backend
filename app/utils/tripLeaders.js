@@ -1,5 +1,5 @@
 import db from "../models/index.js";
-import { ROLE_TRIP_LEADER } from "../authorization/accessControl.js";
+import { ROLE_TRIP_LEADER, ROLE_TRIP_PARTICIPANT } from "../authorization/accessControl.js";
 
 const getTripLeaderRoleId = async () => {
   const role = await db.role.findOne({ where: { roleName: ROLE_TRIP_LEADER } });
@@ -47,6 +47,30 @@ export const getTripLeaderNamesByTripIds = async (tripIds) => {
     const list = map.get(row.tripId) || [];
     list.push(name);
     map.set(row.tripId, list);
+  }
+
+  return map;
+};
+
+/** Map tripId -> count of active Trip Participant roles on the trip. */
+export const getActiveParticipantCountsByTripIds = async (tripIds) => {
+  const ids = [...new Set((tripIds || []).map((id) => Number(id)).filter((id) => !Number.isNaN(id)))];
+  const map = new Map();
+  if (!ids.length) return map;
+
+  const participantRole = await db.role.findOne({ where: { roleName: ROLE_TRIP_PARTICIPANT } });
+  if (!participantRole) return map;
+
+  const rows = await db.tripPeopleRole.findAll({
+    where: { tripId: ids, status: "active", roleId: participantRole.id },
+    attributes: ["tripId"],
+    raw: true,
+  });
+
+  for (const id of ids) map.set(id, 0);
+  for (const row of rows) {
+    const tid = Number(row.tripId);
+    map.set(tid, (map.get(tid) || 0) + 1);
   }
 
   return map;

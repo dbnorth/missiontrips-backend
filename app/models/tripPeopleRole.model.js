@@ -7,6 +7,7 @@ const TripPeopleRole = SequelizeInstance.define("tripPeopleRole", {
   peopleId: { type: Sequelize.INTEGER, allowNull: false },
   roleId: { type: Sequelize.INTEGER, allowNull: false },
   status: { type: Sequelize.ENUM("active", "inactive"), allowNull: false, defaultValue: "active" },
+  participantCost: { type: Sequelize.DECIMAL(10, 2), allowNull: true },
   whygoText: { type: Sequelize.TEXT },
   assiginmentDateTime: { type: Sequelize.DATE },
   version: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },

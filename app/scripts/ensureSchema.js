@@ -37,8 +37,24 @@ const ensureEmailTemplateOrgNullable = async () => {
   logger.info("emailTemplates.orgId is now nullable (global master templates).");
 };
 
+const ensureTripPeopleRoleParticipantCost = async () => {
+  const [rows] = await db.sequelize.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tripPeopleRoles'
+       AND COLUMN_NAME = 'participantCost'`
+  );
+  if (rows.length) return;
+
+  await db.sequelize.query(
+    "ALTER TABLE tripPeopleRoles ADD COLUMN participantCost DECIMAL(10, 2) NULL AFTER status"
+  );
+  logger.info("tripPeopleRoles.participantCost column added.");
+};
+
 export const ensureSchema = async () => {
   await ensureEmailTemplateOrgNullable();
+  await ensureTripPeopleRoleParticipantCost();
 };
 
 export default ensureSchema;

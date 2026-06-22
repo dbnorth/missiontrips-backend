@@ -1,6 +1,6 @@
 import db from "../models/index.js";
 import path from "path";
-import { isOrgAdminForOrg, isSystemAdmin, peopleListOrgIds, ROLE_TRIP_LEADER } from "../authorization/accessControl.js";
+import { canAccessOrg, isOrgAdminForOrg, isSystemAdmin, peopleListOrgIds, ROLE_TRIP_LEADER } from "../authorization/accessControl.js";
 import { optimisticUpdate } from "../utils/optimisticUpdate.js";
 import {
   normalizeEmail,
@@ -83,7 +83,7 @@ exports.findOrgTripLeaders = async (req, res) => {
     if (Number.isNaN(orgId)) {
       return res.status(400).send({ message: "orgId is required." });
     }
-    if (!isSystemAdmin(req) && !isOrgAdminForOrg(req, orgId)) {
+    if (!isSystemAdmin(req) && !isOrgAdminForOrg(req, orgId) && !canAccessOrg(req, orgId)) {
       return res.status(403).send({ message: "Forbidden." });
     }
 

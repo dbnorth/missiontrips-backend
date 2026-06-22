@@ -11,7 +11,7 @@ const TripPeopleRole = db.tripPeopleRole;
 const Trip = db.trip;
 const TripDonation = db.tripDonation;
 const Op = db.Sequelize.Op;
-const fields = ["tripId", "peopleId", "roleId", "status", "whygoText", "assiginmentDateTime"];
+const fields = ["tripId", "peopleId", "roleId", "status", "participantCost", "whygoText", "assiginmentDateTime"];
 
 const exports = {};
 
@@ -63,7 +63,14 @@ exports.create = async (req, res) => {
     if (!(await canManageTripPeople(req, req.body.tripId))) {
       return res.status(403).send({ message: "Forbidden." });
     }
-    const data = await TripPeopleRole.create(req.body);
+    const payload = { ...req.body };
+    if (payload.participantCost == null || payload.participantCost === "") {
+      const trip = await Trip.findByPk(payload.tripId, { attributes: ["participantCost"] });
+      if (trip?.participantCost != null) {
+        payload.participantCost = trip.participantCost;
+      }
+    }
+    const data = await TripPeopleRole.create(payload);
     res.send(data);
   } catch (err) {
     res.status(500).send({ message: err.message });

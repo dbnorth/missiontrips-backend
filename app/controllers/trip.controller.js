@@ -4,10 +4,11 @@ import {
   canAccessTrip,
   isOrgAdminForOrg,
   isSystemAdmin,
+  isTripLeaderForTrip,
   tripListFilter,
 } from "../authorization/accessControl.js";
 import { optimisticUpdate } from "../utils/optimisticUpdate.js";
-import { getTripLeaderPeopleIds, getTripLeaderNamesByTripIds, syncTripLeaders } from "../utils/tripLeaders.js";
+import { getTripLeaderPeopleIds, getTripLeaderNamesByTripIds, getActiveParticipantCountsByTripIds, syncTripLeaders } from "../utils/tripLeaders.js";
 
 const Trip = db.trip;
 const tripFields = [
@@ -37,10 +38,12 @@ exports.findAll = async (req, res) => {
       order: [["startDate", "DESC"]],
     });
     const leadersByTripId = await getTripLeaderNamesByTripIds(data.map((trip) => trip.id));
+    const activeParticipantsByTripId = await getActiveParticipantCountsByTripIds(data.map((trip) => trip.id));
     res.send(
       data.map((trip) => ({
         ...trip.toJSON(),
         leaderNames: leadersByTripId.get(trip.id) || [],
+        activeParticipantCount: activeParticipantsByTripId.get(trip.id) || 0,
       }))
     );
   } catch (err) {
@@ -97,16 +100,19 @@ exports.update = async (req, res) => {
   try {
     const access = await canAccessTrip(req, req.params.id);
     if (!access.ok) return res.status(404).send({ message: "Trip not found." });
-    if (!isOrgAdminForOrg(req, access.trip.orgId) && !isSystemAdmin(req)) {
-      const { isTripLeaderForTrip } = await import("../authorization/accessControl.js");
-      if (!isTripLeaderForTrip(req, req.params.id)) {
-        return res.status(403).send({ message: "Forbidden." });
-      }
+    const canManageOrgTrip =
+      isOrgAdminForOrg(req, access.trip.orgId) || isSystemAdmin(req);
+    if (!canManageOrgTrip && !isTripLeaderForTrip(req, req.params.id)) {
+      return res.status(403).send({ message: "Forbidden." });
     }
-    const { leaderPeopleIds } = req.body;
-    const result = await optimisticUpdate(Trip, req.params.id, req.body, tripFields);
+    const body = { ...req.body };
+    if (!canManageOrgTrip) {
+      delete body.orgId;
+    }
+    const { leaderPeopleIds } = body;
+    const result = await optimisticUpdate(Trip, req.params.id, body, tripFields);
     if (!result.ok) return res.status(result.status).send({ message: result.message });
-    if (Object.prototype.hasOwnProperty.call(req.body, "leaderPeopleIds")) {
+    if (Object.prototype.hasOwnProperty.call(body, "leaderPeopleIds")) {
       const orgId = result.data.orgId;
       await syncTripLeaders(req.params.id, orgId, leaderPeopleIds);
     }
