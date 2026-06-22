@@ -1,4 +1,5 @@
 # Logs
+logs/
 logs/*.log
 logs/*.gz
 logs/*-audit.json
