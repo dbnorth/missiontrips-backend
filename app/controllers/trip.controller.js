@@ -1,5 +1,6 @@
 import db from "../models/index.js";
 import path from "path";
+import fs from "fs";
 import {
   canAccessTrip,
   isOrgAdminForOrg,
@@ -8,7 +9,7 @@ import {
   tripListFilter,
 } from "../authorization/accessControl.js";
 import { optimisticUpdate } from "../utils/optimisticUpdate.js";
-import { getTripLeaderPeopleIds, getTripLeaderNamesByTripIds, getActiveParticipantCountsByTripIds, syncTripLeaders } from "../utils/tripLeaders.js";
+import { getTripLeaderPeopleIds, getTripLeaderNamesByTripIds, getActiveParticipantCountsByTripIds, getActiveParticipantTotalCostsByTripIds, getDonationTotalsByTripIds, syncTripLeaders } from "../utils/tripLeaders.js";
 
 const Trip = db.trip;
 const tripFields = [
@@ -39,11 +40,15 @@ exports.findAll = async (req, res) => {
     });
     const leadersByTripId = await getTripLeaderNamesByTripIds(data.map((trip) => trip.id));
     const activeParticipantsByTripId = await getActiveParticipantCountsByTripIds(data.map((trip) => trip.id));
+    const totalCostsByTripId = await getActiveParticipantTotalCostsByTripIds(data);
+    const donationTotalsByTripId = await getDonationTotalsByTripIds(data.map((trip) => trip.id));
     res.send(
       data.map((trip) => ({
         ...trip.toJSON(),
         leaderNames: leadersByTripId.get(trip.id) || [],
         activeParticipantCount: activeParticipantsByTripId.get(trip.id) || 0,
+        totalParticipantCost: totalCostsByTripId.get(trip.id) || 0,
+        donationTotal: donationTotalsByTripId.get(trip.id) || 0,
       }))
     );
   } catch (err) {
@@ -127,7 +132,22 @@ exports.uploadImage = async (req, res) => {
   try {
     const access = await canAccessTrip(req, req.params.id);
     if (!access.ok) return res.status(404).send({ message: "Trip not found." });
+    const canManage =
+      isOrgAdminForOrg(req, access.trip.orgId) ||
+      isSystemAdmin(req) ||
+      isTripLeaderForTrip(req, req.params.id);
+    if (!canManage) return res.status(403).send({ message: "Forbidden." });
     if (!req.file) return res.status(400).send({ message: "No image uploaded." });
+
+    const trip = await Trip.findByPk(req.params.id);
+    if (!trip) return res.status(404).send({ message: "Trip not found." });
+
+    if (trip.image) {
+      for (const filePath of [path.join("images", trip.image), path.join("uploads", trip.image)]) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    }
+
     const image = path.join("trips", req.file.filename).replace(/\\/g, "/");
     await Trip.update({ image }, { where: { id: req.params.id } });
     res.send({ message: "Image uploaded.", image });
@@ -142,6 +162,12 @@ exports.delete = async (req, res) => {
     if (!access.ok) return res.status(404).send({ message: "Trip not found." });
     if (!isOrgAdminForOrg(req, access.trip.orgId) && !isSystemAdmin(req)) {
       return res.status(403).send({ message: "Forbidden." });
+    }
+    const trip = await Trip.findByPk(req.params.id);
+    if (trip?.image) {
+      for (const filePath of [path.join("images", trip.image), path.join("uploads", trip.image)]) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
     }
     await Trip.destroy({ where: { id: req.params.id } });
     res.send({ message: "Trip deleted." });

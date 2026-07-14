@@ -46,6 +46,8 @@ node_modules/
 jspm_packages/
 # data directories
 uploads/
+images/*
+!images/**/.gitkeep
 
 # TypeScript v1 declaration files
 typings/

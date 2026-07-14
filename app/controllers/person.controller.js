@@ -1,5 +1,6 @@
 import db from "../models/index.js";
 import path from "path";
+import fs from "fs";
 import { canAccessOrg, isOrgAdminForOrg, isSystemAdmin, peopleListOrgIds, ROLE_TRIP_LEADER } from "../authorization/accessControl.js";
 import { optimisticUpdate } from "../utils/optimisticUpdate.js";
 import {
@@ -317,7 +318,26 @@ exports.update = async (req, res) => {
 
 exports.uploadPicture = async (req, res) => {
   try {
+    const person = await Person.findByPk(req.params.id);
+    if (!person) return res.status(404).send({ message: "Person not found." });
+    if (!(await canManagePerson(req, person.id))) {
+      return res.status(403).send({ message: "Forbidden." });
+    }
     if (!req.file) return res.status(400).send({ message: "No picture uploaded." });
+
+    if (person.picture) {
+      for (const filePath of [
+        path.join("images", person.picture),
+        path.join("uploads", person.picture),
+      ]) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch {
+          /* ignore missing previous file */
+        }
+      }
+    }
+
     const picture = path.join("people", req.file.filename).replace(/\\/g, "/");
     await Person.update({ picture }, { where: { id: req.params.id } });
     res.send({ message: "Picture uploaded.", picture });
