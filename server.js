@@ -43,6 +43,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use("/missiontrips/images", express.static(path.join(__dirname, "images")));
 app.use("/missiontrips/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/missiontrips", routes);
 

@@ -52,9 +52,25 @@ const ensureTripPeopleRoleParticipantCost = async () => {
   logger.info("tripPeopleRoles.participantCost column added.");
 };
 
+const ensureOrganizationWebsiteUrl = async () => {
+  const [rows] = await db.sequelize.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'organizations'
+       AND COLUMN_NAME = 'websiteUrl'`
+  );
+  if (rows.length) return;
+
+  await db.sequelize.query(
+    "ALTER TABLE organizations ADD COLUMN websiteUrl VARCHAR(500) NULL AFTER email"
+  );
+  logger.info("organizations.websiteUrl column added.");
+};
+
 export const ensureSchema = async () => {
   await ensureEmailTemplateOrgNullable();
   await ensureTripPeopleRoleParticipantCost();
+  await ensureOrganizationWebsiteUrl();
 };
 
 export default ensureSchema;

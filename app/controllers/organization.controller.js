@@ -22,6 +22,7 @@ const orgFields = [
   "phoneContryCode",
   "phoneNumber",
   "email",
+  "websiteUrl",
   "facebookPage",
   "instagram",
   "colorFamily",
@@ -46,7 +47,9 @@ exports.findAll = async (req, res) => {
 
 exports.findOne = async (req, res) => {
   try {
-    if (!canAccessOrg(req, req.params.id)) {
+    // System admins can always load org details (e.g. Organizations list while emulating another org).
+    // Acting-org scope still applies elsewhere via canAccessOrg.
+    if (!isSystemAdmin(req) && !canAccessOrg(req, req.params.id)) {
       return res.status(404).send({ message: "Organization not found." });
     }
     const data = await Organization.findByPk(req.params.id);
@@ -86,7 +89,21 @@ exports.uploadLogo = async (req, res) => {
       return res.status(403).send({ message: "Forbidden." });
     }
     if (!req.file) return res.status(400).send({ message: "No logo uploaded." });
-    const logo = path.join("org-logos", req.file.filename).replace(/\\/g, "/");
+
+    const org = await Organization.findByPk(req.params.id);
+    if (!org) return res.status(404).send({ message: "Organization not found." });
+
+    if (org.logo) {
+      const previousPaths = [
+        path.join("images", org.logo),
+        path.join("uploads", org.logo),
+      ];
+      for (const filePath of previousPaths) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    }
+
+    const logo = path.join("logos", req.file.filename).replace(/\\/g, "/");
     await Organization.update({ logo }, { where: { id: req.params.id } });
     res.send({ message: "Logo uploaded.", logo });
   } catch (err) {
@@ -100,8 +117,10 @@ exports.delete = async (req, res) => {
     const org = await Organization.findByPk(req.params.id);
     if (!org) return res.status(404).send({ message: "Organization not found." });
     if (org.logo) {
-      const filePath = path.join("uploads", org.logo);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      const candidates = [path.join("images", org.logo), path.join("uploads", org.logo)];
+      for (const filePath of candidates) {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
     }
     await Organization.destroy({ where: { id: req.params.id } });
     res.send({ message: "Organization deleted." });

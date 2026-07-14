@@ -13,6 +13,7 @@ const Organization = SequelizeInstance.define("organization", {
   phoneContryCode: { type: Sequelize.STRING(10) },
   phoneNumber: { type: Sequelize.STRING(30) },
   email: { type: Sequelize.STRING },
+  websiteUrl: { type: Sequelize.STRING(500) },
   facebookPage: { type: Sequelize.STRING(500) },
   instagram: { type: Sequelize.STRING(255) },
   logo: { type: Sequelize.STRING(500) },

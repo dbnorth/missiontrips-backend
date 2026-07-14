@@ -5,6 +5,7 @@ import {
   isSystemAdmin,
   isTripLeaderForTrip,
   isTripParticipantForTrip,
+  ROLE_TRIP_LEADER,
   ROLE_TRIP_PARTICIPANT,
 } from "../authorization/accessControl.js";
 
@@ -13,6 +14,63 @@ const TripPeopleRole = db.tripPeopleRole;
 const TripDonation = db.tripDonation;
 const OrgPeopleRole = db.orgPeopleRole;
 const Role = db.role;
+
+const toUrlSlug = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[/?#]+/g, "");
+
+const personDisplaySlug = (person) =>
+  toUrlSlug(`${person?.firstName || ""} ${person?.lastName || ""}`.trim());
+
+const orgInclude = {
+  model: db.organization,
+  as: "organization",
+  attributes: ["id", "name", "logo", "colorFamily", "websiteUrl"],
+};
+
+const findActiveTripBySlug = async (tripSlug) => {
+  const trips = await Trip.findAll({
+    where: { status: "active" },
+    include: [orgInclude],
+  });
+  return trips.find((t) => toUrlSlug(t.name) === tripSlug) || null;
+};
+
+const findActiveTripById = async (tripId) =>
+  Trip.findByPk(tripId, { include: [orgInclude] });
+
+const donorFacingRoles = async () => {
+  const roles = await Role.findAll({
+    where: { roleName: { [db.Sequelize.Op.in]: [ROLE_TRIP_PARTICIPANT, ROLE_TRIP_LEADER] } },
+  });
+  return roles.map((r) => r.id);
+};
+
+const loadTripParticipants = async (tripId, roleIds) =>
+  TripPeopleRole.findAll({
+    where: { tripId, roleId: { [db.Sequelize.Op.in]: roleIds }, status: "active" },
+    include: [{ model: db.person, as: "person", attributes: ["id", "firstName", "lastName", "bioText", "picture"] }],
+  });
+
+const findTripMember = async (tripId, peopleId, roleIds) =>
+  TripPeopleRole.findOne({
+    where: { tripId, peopleId, roleId: { [db.Sequelize.Op.in]: roleIds }, status: "active" },
+    include: [{ model: db.person, as: "person" }],
+  });
+
+const sendTripPayload = async (res, trip) => {
+  const roleIds = await donorFacingRoles();
+  const participants = await loadTripParticipants(trip.id, roleIds);
+  res.send({ trip, participants });
+};
+
+const sendParticipantPayload = async (res, trip, link) => {
+  const personId = link.peopleId || link.person?.id;
+  const donationTotal = (await TripDonation.sum("amount", { where: { tripId: trip.id, personId } })) || 0;
+  res.send({ trip, participant: link.person, whygoText: link.whygoText, donationTotal });
+};
 
 const exports = {};
 
@@ -93,18 +151,23 @@ exports.participantDashboard = async (req, res) => {
 
 exports.getTripForDonor = async (req, res) => {
   try {
-    const trip = await Trip.findByPk(req.params.tripId, {
-      include: [{ model: db.organization, as: "organization", attributes: ["id", "name", "logo", "colorFamily"] }],
-    });
+    const trip = await findActiveTripById(req.params.tripId);
     if (!trip || trip.status !== "active") {
       return res.status(404).send({ message: "Trip not found." });
     }
-    const participantRole = await Role.findOne({ where: { roleName: ROLE_TRIP_PARTICIPANT } });
-    const participants = await TripPeopleRole.findAll({
-      where: { tripId: trip.id, roleId: participantRole?.id, status: "active" },
-      include: [{ model: db.person, as: "person", attributes: ["id", "firstName", "lastName", "bioText", "picture"] }],
-    });
-    res.send({ trip, participants });
+    await sendTripPayload(res, trip);
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+};
+
+exports.getTripForDonorBySlug = async (req, res) => {
+  try {
+    const trip = await findActiveTripBySlug(req.params.tripSlug);
+    if (!trip) {
+      return res.status(404).send({ message: "Trip not found." });
+    }
+    await sendTripPayload(res, trip);
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
@@ -113,18 +176,31 @@ exports.getTripForDonor = async (req, res) => {
 exports.getParticipantForDonor = async (req, res) => {
   try {
     const { tripId, personId } = req.params;
-    const trip = await Trip.findByPk(tripId);
+    const trip = await findActiveTripById(tripId);
     if (!trip || trip.status !== "active") {
       return res.status(404).send({ message: "Trip not found." });
     }
-    const participantRole = await Role.findOne({ where: { roleName: ROLE_TRIP_PARTICIPANT } });
-    const link = await TripPeopleRole.findOne({
-      where: { tripId, peopleId: personId, roleId: participantRole?.id, status: "active" },
-      include: [{ model: db.person, as: "person" }],
-    });
+    const roleIds = await donorFacingRoles();
+    const link = await findTripMember(trip.id, personId, roleIds);
     if (!link) return res.status(404).send({ message: "Participant not found." });
-    const donationTotal = (await TripDonation.sum("amount", { where: { tripId, personId } })) || 0;
-    res.send({ trip, participant: link.person, whygoText: link.whygoText, donationTotal });
+    await sendParticipantPayload(res, trip, link);
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+};
+
+exports.getParticipantForDonorBySlug = async (req, res) => {
+  try {
+    const { tripSlug, personSlug } = req.params;
+    const trip = await findActiveTripBySlug(tripSlug);
+    if (!trip) {
+      return res.status(404).send({ message: "Trip not found." });
+    }
+    const roleIds = await donorFacingRoles();
+    const members = await loadTripParticipants(trip.id, roleIds);
+    const link = members.find((row) => personDisplaySlug(row.person) === personSlug);
+    if (!link) return res.status(404).send({ message: "Participant not found." });
+    await sendParticipantPayload(res, trip, link);
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
