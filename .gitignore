@@ -44,10 +44,6 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
-# data directories
-uploads/
-images/*
-!images/**/.gitkeep
 
 # TypeScript v1 declaration files
 typings/
@@ -99,8 +95,11 @@ dist
 # vuepress build output
 .vuepress/dist
 
-# Uploaded files
+# Uploaded files (legacy and current)
 uploads/
+images/**
+!images/**/
+!images/**/.gitkeep
 
 # Serverless directories
 .serverless/
