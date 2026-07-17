@@ -13,6 +13,9 @@ import RoleRoutes from "./role.routes.js";
 import DashboardRoutes from "./dashboard.routes.js";
 import ExportRoutes from "./export.routes.js";
 import EmailTemplateRoutes from "./emailTemplate.routes.js";
+import WorkerRoleRoutes from "./workerRole.routes.js";
+import TripWorkerRoleRoutes from "./tripWorkerRole.routes.js";
+import DocumentTypeRoutes from "./documentType.routes.js";
 import PublicRoutes from "./public.routes.js";
 
 const router = Router();
@@ -30,6 +33,9 @@ router.use("/roles", RoleRoutes);
 router.use("/dashboard", DashboardRoutes);
 router.use("/export", ExportRoutes);
 router.use("/email-templates", EmailTemplateRoutes);
+router.use("/worker-roles", WorkerRoleRoutes);
+router.use("/trip-worker-roles", TripWorkerRoleRoutes);
+router.use("/document-types", DocumentTypeRoutes);
 router.use("/public", PublicRoutes);
 
 export default router;

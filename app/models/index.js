@@ -13,6 +13,10 @@ import Donor from "./donor.model.js";
 import TripDonation from "./tripDonation.model.js";
 import EmailTemplate from "./emailTemplate.model.js";
 import EmailLog from "./emailLog.model.js";
+import WorkerRole from "./workerRole.model.js";
+import TripWorkerRole from "./tripWorkerRole.model.js";
+import DocumentType from "./documentType.model.js";
+import PersonDocument from "./personDocument.model.js";
 
 const db = {};
 db.Sequelize = Sequelize;
@@ -30,6 +34,10 @@ db.donor = Donor;
 db.tripDonation = TripDonation;
 db.emailTemplate = EmailTemplate;
 db.emailLog = EmailLog;
+db.workerRole = WorkerRole;
+db.tripWorkerRole = TripWorkerRole;
+db.documentType = DocumentType;
+db.personDocument = PersonDocument;
 
 db.user.hasMany(db.session, { foreignKey: "userId", onDelete: "CASCADE" });
 db.session.belongsTo(db.user, { foreignKey: "userId", onDelete: "CASCADE" });
@@ -53,6 +61,15 @@ db.person.hasMany(db.tripPeopleRole, { foreignKey: "peopleId", onDelete: "CASCAD
 db.tripPeopleRole.belongsTo(db.person, { foreignKey: "peopleId", as: "person", onDelete: "CASCADE" });
 db.role.hasMany(db.tripPeopleRole, { foreignKey: "roleId", onDelete: "RESTRICT" });
 db.tripPeopleRole.belongsTo(db.role, { foreignKey: "roleId", as: "role", onDelete: "RESTRICT" });
+db.tripWorkerRole.hasMany(db.tripPeopleRole, {
+  foreignKey: "tripWorkerRoleId",
+  onDelete: "SET NULL",
+});
+db.tripPeopleRole.belongsTo(db.tripWorkerRole, {
+  foreignKey: "tripWorkerRoleId",
+  as: "tripWorkerRole",
+  onDelete: "SET NULL",
+});
 
 db.trip.hasMany(db.tripDonation, { foreignKey: "tripId", onDelete: "CASCADE" });
 db.tripDonation.belongsTo(db.trip, { foreignKey: "tripId", as: "trip", onDelete: "CASCADE" });
@@ -65,5 +82,47 @@ db.organization.hasMany(db.emailTemplate, { foreignKey: "orgId", onDelete: "CASC
 db.emailTemplate.belongsTo(db.organization, { foreignKey: "orgId", onDelete: "CASCADE" });
 db.trip.hasMany(db.emailTemplate, { foreignKey: "tripId", onDelete: "CASCADE" });
 db.emailTemplate.belongsTo(db.trip, { foreignKey: "tripId", onDelete: "CASCADE" });
+
+db.organization.hasMany(db.workerRole, { foreignKey: "orgId", onDelete: "CASCADE" });
+db.workerRole.belongsTo(db.organization, {
+  foreignKey: "orgId",
+  as: "organization",
+  onDelete: "CASCADE",
+});
+
+db.person.hasMany(db.personDocument, { foreignKey: "personId", onDelete: "CASCADE" });
+db.personDocument.belongsTo(db.person, {
+  foreignKey: "personId",
+  as: "person",
+  onDelete: "CASCADE",
+});
+db.documentType.hasMany(db.workerRole, {
+  foreignKey: "documentTypeId",
+  onDelete: "SET NULL",
+});
+db.workerRole.belongsTo(db.documentType, {
+  foreignKey: "documentTypeId",
+  as: "documentType",
+  onDelete: "SET NULL",
+});
+
+db.documentType.hasMany(db.personDocument, {
+  foreignKey: "documentTypeId",
+  onDelete: "RESTRICT",
+});
+db.personDocument.belongsTo(db.documentType, {
+  foreignKey: "documentTypeId",
+  as: "documentType",
+  onDelete: "RESTRICT",
+});
+
+db.trip.hasMany(db.tripWorkerRole, { foreignKey: "tripId", onDelete: "CASCADE" });
+db.tripWorkerRole.belongsTo(db.trip, { foreignKey: "tripId", as: "trip", onDelete: "CASCADE" });
+db.workerRole.hasMany(db.tripWorkerRole, { foreignKey: "workerRoleId", onDelete: "CASCADE" });
+db.tripWorkerRole.belongsTo(db.workerRole, {
+  foreignKey: "workerRoleId",
+  as: "workerRole",
+  onDelete: "CASCADE",
+});
 
 export default db;

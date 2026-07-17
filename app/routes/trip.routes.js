@@ -1,5 +1,6 @@
 import { Router } from "express";
 import trips from "../controllers/trip.controller.js";
+import tripBrowse from "../controllers/tripBrowse.controller.js";
 import authenticate from "../authorization/accessControl.js";
 import { uploadTripImage } from "../config/multer.js";
 
@@ -14,6 +15,11 @@ const handleTripImageUpload = (req, res, next) => {
     return res.status(400).send({ message: err.message || "Invalid image file." });
   });
 };
+
+router.get("/browse/orgs", [authenticate], tripBrowse.listBrowseOrgs);
+router.get("/browse", [authenticate], tripBrowse.listActiveTrips);
+router.get("/browse/:id", [authenticate], tripBrowse.getBrowseTrip);
+router.post("/browse/:id/apply", [authenticate], tripBrowse.applyToTrip);
 
 router.get("/", [authenticate], trips.findAll);
 router.get("/:id", [authenticate], trips.findOne);

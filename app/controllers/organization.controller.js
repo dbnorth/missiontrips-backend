@@ -2,11 +2,8 @@ import db from "../models/index.js";
 import path from "path";
 import fs from "fs";
 import {
-  canAccessOrg,
   isOrgAdminForOrg,
   isSystemAdmin,
-  orgListFilter,
-  parseActingOrganizationHeader,
 } from "../authorization/accessControl.js";
 import { optimisticUpdate } from "../utils/optimisticUpdate.js";
 
@@ -32,13 +29,8 @@ const exports = {};
 
 exports.findAll = async (req, res) => {
   try {
-    if (isSystemAdmin(req)) {
-      const data = await Organization.findAll({ order: [["name", "ASC"]] });
-      return res.send(data);
-    }
-    const where = orgListFilter(req);
-    if (where === null) return res.send([]);
-    const data = await Organization.findAll({ where: where || {}, order: [["name", "ASC"]] });
+    // Any authenticated user can list organizations for the org selector.
+    const data = await Organization.findAll({ order: [["name", "ASC"]] });
     res.send(data);
   } catch (err) {
     res.status(500).send({ message: err.message });
@@ -47,11 +39,7 @@ exports.findAll = async (req, res) => {
 
 exports.findOne = async (req, res) => {
   try {
-    // System admins can always load org details (e.g. Organizations list while emulating another org).
-    // Acting-org scope still applies elsewhere via canAccessOrg.
-    if (!isSystemAdmin(req) && !canAccessOrg(req, req.params.id)) {
-      return res.status(404).send({ message: "Organization not found." });
-    }
+    // Read access for branding/selection; management remains gated on update/delete.
     const data = await Organization.findByPk(req.params.id);
     if (!data) return res.status(404).send({ message: "Organization not found." });
     res.send(data);

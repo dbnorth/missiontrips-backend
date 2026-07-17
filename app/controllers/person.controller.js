@@ -37,9 +37,32 @@ const personFields = [
   "postalCode",
   "phoneContryCode",
   "phoneNumber",
+  "birthDate",
+  "gender",
+  "emergencyContactName",
+  "emergencyContactPhoneCountryCode",
+  "emergencyContactPhoneNumber",
+  "hasAllergies",
+  "allergiesDescription",
+  "takesMedication",
+  "currentChurchHome",
+  "currentChurchHomeCity",
+  "currentChurchHomeStateProv",
   "bioText",
   "userId",
 ];
+
+const validatePersonFields = (data) => {
+  if (
+    Object.prototype.hasOwnProperty.call(data, "gender") &&
+    data.gender != null &&
+    data.gender !== "" &&
+    !["male", "female"].includes(data.gender)
+  ) {
+    return "Gender must be male or female.";
+  }
+  return null;
+};
 
 exports.findAll = async (req, res) => {
   try {
@@ -157,6 +180,8 @@ exports.findOne = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const { orgId: bodyOrgId, roleId, password, isAdmin, ...personData } = req.body;
+    const validationError = validatePersonFields(personData);
+    if (validationError) return res.status(400).send({ message: validationError });
     let orgId = bodyOrgId != null && bodyOrgId !== "" ? parseInt(bodyOrgId, 10) : null;
 
     if (!isSystemAdmin(req)) {
@@ -208,6 +233,17 @@ exports.create = async (req, res) => {
           postalCode: personData.postalCode,
           phoneContryCode: personData.phoneContryCode,
           phoneNumber: personData.phoneNumber,
+          birthDate: personData.birthDate,
+          gender: personData.gender,
+          emergencyContactName: personData.emergencyContactName,
+          emergencyContactPhoneCountryCode: personData.emergencyContactPhoneCountryCode,
+          emergencyContactPhoneNumber: personData.emergencyContactPhoneNumber,
+          hasAllergies: personData.hasAllergies,
+          allergiesDescription: personData.allergiesDescription,
+          takesMedication: personData.takesMedication,
+          currentChurchHome: personData.currentChurchHome,
+          currentChurchHomeCity: personData.currentChurchHomeCity,
+          currentChurchHomeStateProv: personData.currentChurchHomeStateProv,
           bioText: personData.bioText,
         },
         { mergeOptional: isExisting }
@@ -253,6 +289,8 @@ exports.update = async (req, res) => {
     }
 
     const body = { ...req.body };
+    const validationError = validatePersonFields(body);
+    if (validationError) return res.status(400).send({ message: validationError });
 
     if (Object.prototype.hasOwnProperty.call(body, "email") && person.userId) {
       const newEmail = body.email?.trim()?.toLowerCase() || "";
