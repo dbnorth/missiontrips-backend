@@ -2,13 +2,17 @@ import db from "../models/index.js";
 import path from "path";
 import fs from "fs";
 import {
-  canAccessOrg,
   isOrgAdminForOrg,
   isSystemAdmin,
-  orgListFilter,
-  parseActingOrganizationHeader,
 } from "../authorization/accessControl.js";
 import { optimisticUpdate } from "../utils/optimisticUpdate.js";
+import {
+  AGREEMENTS_DIR_NAME,
+  agreementVersionRelativePath,
+  agreementAbsolutePath,
+  loadOrganizationAgreement,
+  removeAllAgreementVersions,
+} from "../utils/organizationAgreement.js";
 
 const Organization = db.organization;
 const orgFields = [
@@ -28,17 +32,15 @@ const orgFields = [
   "colorFamily",
 ];
 
+const canManageOrg = (req, orgId) =>
+  isOrgAdminForOrg(req, orgId) || isSystemAdmin(req);
+
 const exports = {};
 
 exports.findAll = async (req, res) => {
   try {
-    if (isSystemAdmin(req)) {
-      const data = await Organization.findAll({ order: [["name", "ASC"]] });
-      return res.send(data);
-    }
-    const where = orgListFilter(req);
-    if (where === null) return res.send([]);
-    const data = await Organization.findAll({ where: where || {}, order: [["name", "ASC"]] });
+    // Any authenticated user can list organizations for the org selector.
+    const data = await Organization.findAll({ order: [["name", "ASC"]] });
     res.send(data);
   } catch (err) {
     res.status(500).send({ message: err.message });
@@ -47,11 +49,7 @@ exports.findAll = async (req, res) => {
 
 exports.findOne = async (req, res) => {
   try {
-    // System admins can always load org details (e.g. Organizations list while emulating another org).
-    // Acting-org scope still applies elsewhere via canAccessOrg.
-    if (!isSystemAdmin(req) && !canAccessOrg(req, req.params.id)) {
-      return res.status(404).send({ message: "Organization not found." });
-    }
+    // Read access for branding/selection; management remains gated on update/delete.
     const data = await Organization.findByPk(req.params.id);
     if (!data) return res.status(404).send({ message: "Organization not found." });
     res.send(data);
@@ -72,7 +70,7 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    if (!isOrgAdminForOrg(req, req.params.id) && !isSystemAdmin(req)) {
+    if (!canManageOrg(req, req.params.id)) {
       return res.status(403).send({ message: "Forbidden." });
     }
     const result = await optimisticUpdate(Organization, req.params.id, req.body, orgFields);
@@ -85,7 +83,7 @@ exports.update = async (req, res) => {
 
 exports.uploadLogo = async (req, res) => {
   try {
-    if (!isOrgAdminForOrg(req, req.params.id) && !isSystemAdmin(req)) {
+    if (!canManageOrg(req, req.params.id)) {
       return res.status(403).send({ message: "Forbidden." });
     }
     if (!req.file) return res.status(400).send({ message: "No logo uploaded." });
@@ -111,6 +109,50 @@ exports.uploadLogo = async (req, res) => {
   }
 };
 
+exports.getAgreement = async (req, res) => {
+  try {
+    if (!canManageOrg(req, req.params.id)) {
+      return res.status(403).send({ message: "Forbidden." });
+    }
+    const org = await Organization.findByPk(req.params.id);
+    if (!org) return res.status(404).send({ message: "Organization not found." });
+    res.send(await loadOrganizationAgreement(org.id));
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+};
+
+exports.saveAgreement = async (req, res) => {
+  try {
+    if (!canManageOrg(req, req.params.id)) {
+      return res.status(403).send({ message: "Forbidden." });
+    }
+    const org = await Organization.findByPk(req.params.id);
+    if (!org) return res.status(404).send({ message: "Organization not found." });
+
+    const content = typeof req.body?.content === "string" ? req.body.content : null;
+    if (content == null) {
+      return res.status(400).send({ message: "Agreement content is required." });
+    }
+
+    fs.mkdirSync(AGREEMENTS_DIR_NAME, { recursive: true });
+    const relativePath = agreementVersionRelativePath(org.id);
+    const filePath = agreementAbsolutePath(relativePath);
+
+    fs.writeFileSync(filePath, content, "utf8");
+    await org.update({ agreementFileName: relativePath });
+
+    res.send({
+      message: "Participant agreement saved.",
+      agreementFileName: relativePath,
+      exists: true,
+      content,
+    });
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+};
+
 exports.delete = async (req, res) => {
   try {
     if (!isSystemAdmin(req)) return res.status(403).send({ message: "Forbidden." });
@@ -122,6 +164,7 @@ exports.delete = async (req, res) => {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
     }
+    removeAllAgreementVersions(org.id);
     await Organization.destroy({ where: { id: req.params.id } });
     res.send({ message: "Organization deleted." });
   } catch (err) {

@@ -41,7 +41,7 @@ const buildAuthPayload = async (user, token) => {
     : [];
   const tripRoles = person
     ? await TripPeopleRole.findAll({
-        where: { peopleId: person.id, status: "active" },
+        where: { peopleId: person.id, status: "approved" },
         include: [
           {
             model: db.trip,

@@ -7,6 +7,7 @@ const roles = [
   { roleName: "Trip Leader", roleDescription: "Leader for a specific trip" },
   { roleName: "Trip Participant", roleDescription: "Participant on a trip" },
   { roleName: "Pending User", roleDescription: "Awaiting organization approval" },
+  { roleName: "Trip Applicant", roleDescription: "Applied to a trip; awaiting approval" },
 ];
 
 const run = async () => {

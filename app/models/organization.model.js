@@ -17,6 +17,7 @@ const Organization = SequelizeInstance.define("organization", {
   facebookPage: { type: Sequelize.STRING(500) },
   instagram: { type: Sequelize.STRING(255) },
   logo: { type: Sequelize.STRING(500) },
+  agreementFileName: { type: Sequelize.STRING(500) },
   colorFamily: { type: Sequelize.STRING(50) },
   version: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
 });

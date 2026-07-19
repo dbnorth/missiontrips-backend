@@ -13,6 +13,7 @@ export const ROLE_ORG_ADMIN = "Org Admin";
 export const ROLE_TRIP_LEADER = "Trip Leader";
 export const ROLE_TRIP_PARTICIPANT = "Trip Participant";
 export const ROLE_PENDING_USER = "Pending User";
+export const ROLE_TRIP_APPLICANT = "Trip Applicant";
 
 export const isActiveOrgRole = (roleName) => roleName === ROLE_ORG_ADMIN;
 
@@ -32,7 +33,7 @@ export const parseActingOrganizationHeader = (req) => {
 export const getTripLeaderOrgIds = (req) => [
   ...new Set(
     (req.user?.tripRoles || [])
-      .filter((r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "active")
+      .filter((r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "approved")
       .map((r) => Number(r.trip?.orgId))
       .filter((id) => !Number.isNaN(id))
   ),
@@ -79,7 +80,7 @@ const loadUserContext = async (userId) => {
     });
 
     tripRoles = await TripPeopleRole.findAll({
-      where: { peopleId: personId, status: "active" },
+      where: { peopleId: personId, status: "approved" },
       include: [
         {
           model: Trip,
@@ -175,7 +176,7 @@ export const canAccessOrg = (req, orgId) => {
 
 export const getTripRoleForTrip = (req, tripId) => {
   const id = Number(tripId);
-  return (req.user?.tripRoles || []).find((r) => Number(r.tripId) === id && r.status === "active");
+  return (req.user?.tripRoles || []).find((r) => Number(r.tripId) === id && r.status === "approved");
 };
 
 export const isTripLeaderForTrip = (req, tripId) => {
@@ -191,13 +192,11 @@ export const isTripParticipantForTrip = (req, tripId) => {
 export const canAccessTrip = async (req, tripId) => {
   const trip = await Trip.findByPk(tripId, { attributes: ["id", "orgId"] });
   if (!trip) return { ok: false, trip: null };
+  // System admins can manage any trip; acting-org only scopes list views.
+  if (isSystemAdmin(req)) return { ok: true, trip };
   if (isOrgAdminForOrg(req, trip.orgId)) return { ok: true, trip };
   if (isTripLeaderForTrip(req, tripId)) return { ok: true, trip };
   if (isTripParticipantForTrip(req, tripId)) return { ok: true, trip };
-  if (isSystemAdmin(req)) {
-    const acting = parseActingOrganizationHeader(req);
-    if (acting == null || Number(acting) === Number(trip.orgId)) return { ok: true, trip };
-  }
   return { ok: false, trip };
 };
 

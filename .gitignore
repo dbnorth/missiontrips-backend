@@ -100,6 +100,12 @@ uploads/
 images/**
 !images/**/
 !images/**/.gitkeep
+agreements/**
+!agreements/**/
+!agreements/**/.gitkeep
+documents/**
+!documents/**/
+!documents/**/.gitkeep
 
 # Serverless directories
 .serverless/

@@ -86,7 +86,7 @@ const pickTripPayload = (body) => {
 exports.create = async (req, res) => {
   try {
     const orgId = req.body.orgId;
-    if (!isOrgAdminForOrg(req, orgId) && !isSystemAdmin(req)) {
+    if (!isSystemAdmin(req) && !isOrgAdminForOrg(req, orgId)) {
       return res.status(403).send({ message: "Forbidden." });
     }
     const { leaderPeopleIds } = req.body;
@@ -130,17 +130,17 @@ exports.update = async (req, res) => {
 
 exports.uploadImage = async (req, res) => {
   try {
+    const trip = await Trip.findByPk(req.params.id);
+    if (!trip) return res.status(404).send({ message: "Trip not found." });
+
     const access = await canAccessTrip(req, req.params.id);
     if (!access.ok) return res.status(404).send({ message: "Trip not found." });
     const canManage =
-      isOrgAdminForOrg(req, access.trip.orgId) ||
       isSystemAdmin(req) ||
+      isOrgAdminForOrg(req, trip.orgId) ||
       isTripLeaderForTrip(req, req.params.id);
     if (!canManage) return res.status(403).send({ message: "Forbidden." });
     if (!req.file) return res.status(400).send({ message: "No image uploaded." });
-
-    const trip = await Trip.findByPk(req.params.id);
-    if (!trip) return res.status(404).send({ message: "Trip not found." });
 
     if (trip.image) {
       for (const filePath of [path.join("images", trip.image), path.join("uploads", trip.image)]) {
