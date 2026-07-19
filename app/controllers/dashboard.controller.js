@@ -50,13 +50,13 @@ const donorFacingRoles = async () => {
 
 const loadTripParticipants = async (tripId, roleIds) =>
   TripPeopleRole.findAll({
-    where: { tripId, roleId: { [db.Sequelize.Op.in]: roleIds }, status: "active" },
+    where: { tripId, roleId: { [db.Sequelize.Op.in]: roleIds }, status: "approved" },
     include: [{ model: db.person, as: "person", attributes: ["id", "firstName", "lastName", "bioText", "picture"] }],
   });
 
 const findTripMember = async (tripId, peopleId, roleIds) =>
   TripPeopleRole.findOne({
-    where: { tripId, peopleId, roleId: { [db.Sequelize.Op.in]: roleIds }, status: "active" },
+    where: { tripId, peopleId, roleId: { [db.Sequelize.Op.in]: roleIds }, status: "approved" },
     include: [{ model: db.person, as: "person" }],
   });
 

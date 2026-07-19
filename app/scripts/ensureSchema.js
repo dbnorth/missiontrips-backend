@@ -68,6 +68,23 @@ const ensureOrganizationWebsiteUrl = async () => {
   logger.info("organizations.websiteUrl column added.");
 };
 
+const ensureOrganizationAgreementFileName = async () => {
+  fs.mkdirSync("agreements", { recursive: true });
+
+  const [rows] = await db.sequelize.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'organizations'
+       AND COLUMN_NAME = 'agreementFileName'`
+  );
+  if (rows.length) return;
+
+  await db.sequelize.query(
+    "ALTER TABLE organizations ADD COLUMN agreementFileName VARCHAR(500) NULL AFTER logo"
+  );
+  logger.info("organizations.agreementFileName column added.");
+};
+
 const ensureTripPeopleRoleTripWorkerRoleId = async () => {
   const [rows] = await db.sequelize.query(
     `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -152,6 +169,13 @@ const ensureTripPeopleRoleApplicationFields = async () => {
     ["licenseStatus", "ENUM('yes', 'yes_retired', 'no') NULL"],
     ["hasPreferredRoommate", "TINYINT(1) NOT NULL DEFAULT 0"],
     ["preferredRoommateNames", "VARCHAR(500) NULL"],
+    ["agreementAccepted", "TINYINT(1) NOT NULL DEFAULT 0"],
+    ["agreementSignatureName", "VARCHAR(255) NULL"],
+    ["agreementDate", "DATETIME NULL"],
+    ["agreementAdultFirstName", "VARCHAR(100) NULL"],
+    ["agreementAdultLastName", "VARCHAR(100) NULL"],
+    ["agreementAdultEmail", "VARCHAR(255) NULL"],
+    ["agreementAdultRelationship", "VARCHAR(100) NULL"],
   ];
 
   for (const [columnName, definition] of columns) {
@@ -169,6 +193,67 @@ const ensureTripPeopleRoleApplicationFields = async () => {
     );
     logger.info(`tripPeopleRoles.${columnName} column added.`);
   }
+
+  // Migrate legacy agreementSignedAt → agreementDate, then drop signedAt.
+  const [dateCols] = await db.sequelize.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tripPeopleRoles'
+       AND COLUMN_NAME IN ('agreementDate', 'agreementSignedAt')`
+  );
+  const names = new Set(dateCols.map((r) => r.COLUMN_NAME));
+  if (names.has("agreementSignedAt")) {
+    if (names.has("agreementDate")) {
+      await db.sequelize.query(`
+        UPDATE tripPeopleRoles
+        SET agreementDate = agreementSignedAt
+        WHERE agreementDate IS NULL AND agreementSignedAt IS NOT NULL
+      `);
+    }
+    await db.sequelize.query(`ALTER TABLE tripPeopleRoles DROP COLUMN agreementSignedAt`);
+    logger.info("tripPeopleRoles.agreementSignedAt migrated to agreementDate and removed.");
+  }
+};
+
+const ensureTripPeopleRoleStatus = async () => {
+  const [columns] = await db.sequelize.query(
+    `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tripPeopleRoles'
+       AND COLUMN_NAME = 'status'`
+  );
+  if (!columns.length) return;
+
+  const columnType = columns[0]?.COLUMN_TYPE || "";
+  const desired =
+    columnType.includes("'incomplete'") &&
+    columnType.includes("'ready'") &&
+    columnType.includes("'approved'") &&
+    columnType.includes("'denied'") &&
+    columnType.includes("'canceled'") &&
+    !columnType.includes("'applied'") &&
+    !columnType.includes("'active'") &&
+    !columnType.includes("'inactive'");
+  if (desired) return;
+
+  await db.sequelize.query(`
+    ALTER TABLE tripPeopleRoles
+    MODIFY COLUMN status ENUM(
+      'active', 'inactive', 'applied', 'incomplete', 'ready', 'approved', 'denied', 'canceled'
+    ) NOT NULL DEFAULT 'incomplete'
+  `);
+  await db.sequelize.query(`
+    UPDATE tripPeopleRoles SET status = 'approved' WHERE status = 'active'
+  `);
+  await db.sequelize.query(`
+    UPDATE tripPeopleRoles SET status = 'incomplete' WHERE status IN ('inactive', 'applied')
+  `);
+  await db.sequelize.query(`
+    ALTER TABLE tripPeopleRoles
+    MODIFY COLUMN status ENUM('incomplete', 'ready', 'approved', 'denied', 'canceled')
+    NOT NULL DEFAULT 'incomplete'
+  `);
+  logger.info("tripPeopleRoles.status updated to incomplete/ready/approved/denied/canceled.");
 };
 
 const ensureTripApplicantRole = async () => {
@@ -352,17 +437,122 @@ const ensureWorkerRoleDocumentType = async () => {
   }
 };
 
+const ensureNamedUniqueIndexes = async () => {
+  const renames = [
+    ["roles", "roleName", "roles_roleName_unique"],
+    ["users", "email", "users_email_unique"],
+  ];
+
+  for (const [tableName, oldName, newName] of renames) {
+    const [indexes] = await db.sequelize.query(`SHOW INDEX FROM \`${tableName}\``);
+    const names = new Set(indexes.map((i) => i.Key_name));
+    if (names.has(newName)) {
+      // Drop any leftover duplicate unique indexes (roleName_2, email_3, etc.)
+      for (const name of names) {
+        if (name === "PRIMARY" || name === newName) continue;
+        await db.sequelize.query(`ALTER TABLE \`${tableName}\` DROP INDEX \`${name}\``);
+        logger.info(`${tableName}.${name} duplicate index removed.`);
+      }
+      continue;
+    }
+    if (names.has(oldName)) {
+      await db.sequelize.query(
+        `ALTER TABLE \`${tableName}\` RENAME INDEX \`${oldName}\` TO \`${newName}\``
+      );
+      logger.info(`${tableName}.${oldName} renamed to ${newName}.`);
+    }
+  }
+};
+
+const ensureTripTravelOptionsTable = async () => {
+  const [tables] = await db.sequelize.query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tripTravelOptions'`
+  );
+  if (!tables.length) {
+    await db.sequelize.query(`
+      CREATE TABLE tripTravelOptions (
+        id INT NOT NULL AUTO_INCREMENT,
+        tripId INT NOT NULL,
+        description VARCHAR(500) NOT NULL,
+        priceAdjustment DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+        setNumber INT NOT NULL DEFAULT 1,
+        createdAt DATETIME NOT NULL,
+        updatedAt DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        KEY tripTravelOptions_tripId_idx (tripId),
+        CONSTRAINT tripTravelOptions_tripId_fk
+          FOREIGN KEY (tripId) REFERENCES trips (id)
+          ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    logger.info("tripTravelOptions table created.");
+    return;
+  }
+
+  const [columns] = await db.sequelize.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tripTravelOptions'
+       AND COLUMN_NAME = 'setNumber'`
+  );
+  if (!columns.length) {
+    await db.sequelize.query(`
+      ALTER TABLE tripTravelOptions
+      ADD COLUMN setNumber INT NOT NULL DEFAULT 1 AFTER priceAdjustment
+    `);
+    logger.info("tripTravelOptions.setNumber column added.");
+  }
+};
+
+const ensureTripPeopleRoleOptionsTable = async () => {
+  const [tables] = await db.sequelize.query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tripPeopleRoleOptions'`
+  );
+  if (tables.length) return;
+
+  await db.sequelize.query(`
+    CREATE TABLE tripPeopleRoleOptions (
+      id INT NOT NULL AUTO_INCREMENT,
+      tripPeopleRoleId INT NOT NULL,
+      tripTravelOptionId INT NOT NULL,
+      selected TINYINT(1) NOT NULL DEFAULT 0,
+      createdAt DATETIME NOT NULL,
+      updatedAt DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY tripPeopleRoleOptions_assignment_option_uk (tripPeopleRoleId, tripTravelOptionId),
+      KEY tripPeopleRoleOptions_tripPeopleRoleId_idx (tripPeopleRoleId),
+      KEY tripPeopleRoleOptions_tripTravelOptionId_idx (tripTravelOptionId),
+      CONSTRAINT tripPeopleRoleOptions_tripPeopleRoleId_fk
+        FOREIGN KEY (tripPeopleRoleId) REFERENCES tripPeopleRoles (id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT tripPeopleRoleOptions_tripTravelOptionId_fk
+        FOREIGN KEY (tripTravelOptionId) REFERENCES tripTravelOptions (id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  logger.info("tripPeopleRoleOptions table created.");
+};
+
 export const ensureSchema = async () => {
+  await ensureNamedUniqueIndexes();
   await ensureEmailTemplateOrgNullable();
   await ensureTripPeopleRoleParticipantCost();
   await ensureOrganizationWebsiteUrl();
+  await ensureOrganizationAgreementFileName();
   await ensureTripPeopleRoleTripWorkerRoleId();
   await ensurePersonProfileFields();
   await ensureTripPeopleRoleApplicationFields();
+  await ensureTripPeopleRoleStatus();
   await ensureTripApplicantRole();
   await ensureDocumentTypesTable();
   await ensurePersonDocumentsTable();
   await ensureWorkerRoleDocumentType();
+  await ensureTripTravelOptionsTable();
+  await ensureTripPeopleRoleOptionsTable();
 };
 
 export default ensureSchema;

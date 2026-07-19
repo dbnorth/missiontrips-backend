@@ -24,7 +24,7 @@ const getOrgAdminOrgIds = (req) => [
 
 const getTripLeaderTripIds = (req, orgId = null) => {
   const roles = (req.user?.tripRoles || []).filter(
-    (r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "active"
+    (r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "approved"
   );
   const ids = roles
     .filter((r) => {

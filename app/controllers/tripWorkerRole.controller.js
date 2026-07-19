@@ -43,7 +43,7 @@ const signedUpCountsByTripWorkerRoleId = async (tripId) => {
     ],
     where: {
       tripId,
-      status: "active",
+      status: { [db.Sequelize.Op.in]: ["incomplete", "ready", "approved"] },
       tripWorkerRoleId: { [db.Sequelize.Op.ne]: null },
     },
     group: ["tripWorkerRoleId"],

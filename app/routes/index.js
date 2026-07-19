@@ -15,6 +15,7 @@ import ExportRoutes from "./export.routes.js";
 import EmailTemplateRoutes from "./emailTemplate.routes.js";
 import WorkerRoleRoutes from "./workerRole.routes.js";
 import TripWorkerRoleRoutes from "./tripWorkerRole.routes.js";
+import TripTravelOptionRoutes from "./tripTravelOption.routes.js";
 import DocumentTypeRoutes from "./documentType.routes.js";
 import PublicRoutes from "./public.routes.js";
 
@@ -35,6 +36,7 @@ router.use("/export", ExportRoutes);
 router.use("/email-templates", EmailTemplateRoutes);
 router.use("/worker-roles", WorkerRoleRoutes);
 router.use("/trip-worker-roles", TripWorkerRoleRoutes);
+router.use("/trip-travel-options", TripTravelOptionRoutes);
 router.use("/document-types", DocumentTypeRoutes);
 router.use("/public", PublicRoutes);
 

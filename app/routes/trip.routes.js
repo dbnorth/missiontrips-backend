@@ -20,6 +20,8 @@ router.get("/browse/orgs", [authenticate], tripBrowse.listBrowseOrgs);
 router.get("/browse", [authenticate], tripBrowse.listActiveTrips);
 router.get("/browse/:id", [authenticate], tripBrowse.getBrowseTrip);
 router.post("/browse/:id/apply", [authenticate], tripBrowse.applyToTrip);
+router.get("/browse/:id/application", [authenticate], tripBrowse.getApplication);
+router.put("/browse/:id/application", [authenticate], tripBrowse.updateApplication);
 
 router.get("/", [authenticate], trips.findAll);
 router.get("/:id", [authenticate], trips.findOne);

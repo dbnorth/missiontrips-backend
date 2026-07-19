@@ -33,7 +33,7 @@ export const parseActingOrganizationHeader = (req) => {
 export const getTripLeaderOrgIds = (req) => [
   ...new Set(
     (req.user?.tripRoles || [])
-      .filter((r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "active")
+      .filter((r) => r.role?.roleName === ROLE_TRIP_LEADER && r.status === "approved")
       .map((r) => Number(r.trip?.orgId))
       .filter((id) => !Number.isNaN(id))
   ),
@@ -80,7 +80,7 @@ const loadUserContext = async (userId) => {
     });
 
     tripRoles = await TripPeopleRole.findAll({
-      where: { peopleId: personId, status: "active" },
+      where: { peopleId: personId, status: "approved" },
       include: [
         {
           model: Trip,
@@ -176,7 +176,7 @@ export const canAccessOrg = (req, orgId) => {
 
 export const getTripRoleForTrip = (req, tripId) => {
   const id = Number(tripId);
-  return (req.user?.tripRoles || []).find((r) => Number(r.tripId) === id && r.status === "active");
+  return (req.user?.tripRoles || []).find((r) => Number(r.tripId) === id && r.status === "approved");
 };
 
 export const isTripLeaderForTrip = (req, tripId) => {

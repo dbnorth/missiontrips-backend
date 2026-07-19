@@ -45,7 +45,7 @@ const getActiveTripMemberRows = async (tripIds) => {
   if (!roleIds.length) return [];
 
   return db.tripPeopleRole.findAll({
-    where: { tripId: ids, status: "active", roleId: roleIds },
+    where: { tripId: ids, status: "approved", roleId: roleIds },
     attributes: ["tripId", "peopleId", "participantCost"],
     raw: true,
   });
@@ -187,7 +187,7 @@ export const syncTripLeaders = async (tripId, orgId, leaderPeopleIds = []) => {
         tripId,
         peopleId,
         roleId,
-        status: "active",
+        status: "approved",
         assiginmentDateTime: new Date(),
       });
     }

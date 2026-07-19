@@ -15,6 +15,8 @@ import EmailTemplate from "./emailTemplate.model.js";
 import EmailLog from "./emailLog.model.js";
 import WorkerRole from "./workerRole.model.js";
 import TripWorkerRole from "./tripWorkerRole.model.js";
+import TripTravelOption from "./tripTravelOption.model.js";
+import TripPeopleRoleOption from "./tripPeopleRoleOption.model.js";
 import DocumentType from "./documentType.model.js";
 import PersonDocument from "./personDocument.model.js";
 
@@ -36,6 +38,8 @@ db.emailTemplate = EmailTemplate;
 db.emailLog = EmailLog;
 db.workerRole = WorkerRole;
 db.tripWorkerRole = TripWorkerRole;
+db.tripTravelOption = TripTravelOption;
+db.tripPeopleRoleOption = TripPeopleRoleOption;
 db.documentType = DocumentType;
 db.personDocument = PersonDocument;
 
@@ -122,6 +126,32 @@ db.workerRole.hasMany(db.tripWorkerRole, { foreignKey: "workerRoleId", onDelete:
 db.tripWorkerRole.belongsTo(db.workerRole, {
   foreignKey: "workerRoleId",
   as: "workerRole",
+  onDelete: "CASCADE",
+});
+
+db.trip.hasMany(db.tripTravelOption, { foreignKey: "tripId", onDelete: "CASCADE" });
+db.tripTravelOption.belongsTo(db.trip, {
+  foreignKey: "tripId",
+  as: "trip",
+  onDelete: "CASCADE",
+});
+
+db.tripPeopleRole.hasMany(db.tripPeopleRoleOption, {
+  foreignKey: "tripPeopleRoleId",
+  onDelete: "CASCADE",
+});
+db.tripPeopleRoleOption.belongsTo(db.tripPeopleRole, {
+  foreignKey: "tripPeopleRoleId",
+  as: "tripPeopleRole",
+  onDelete: "CASCADE",
+});
+db.tripTravelOption.hasMany(db.tripPeopleRoleOption, {
+  foreignKey: "tripTravelOptionId",
+  onDelete: "CASCADE",
+});
+db.tripPeopleRoleOption.belongsTo(db.tripTravelOption, {
+  foreignKey: "tripTravelOptionId",
+  as: "tripTravelOption",
   onDelete: "CASCADE",
 });
 
