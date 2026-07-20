@@ -20,6 +20,8 @@ const TripPeopleRole = db.tripPeopleRole;
 const Trip = db.trip;
 const TripDonation = db.tripDonation;
 const TripWorkerRole = db.tripWorkerRole;
+const TripTravelOption = db.tripTravelOption;
+const TripPeopleRoleOption = db.tripPeopleRoleOption;
 const Op = db.Sequelize.Op;
 const fields = [
   "tripId",
@@ -146,6 +148,48 @@ exports.findAll = async (req, res) => {
         donationTotal: totalsByPersonId.get(Number(row.peopleId)) || 0,
       }))
     );
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+};
+
+const loadTravelOptionsForAssignment = async (tripId, tripPeopleRoleId) => {
+  const options = await TripTravelOption.findAll({
+    where: { tripId },
+    order: [
+      ["setNumber", "ASC"],
+      ["id", "ASC"],
+    ],
+  });
+  let selectedMap = new Map();
+  if (tripPeopleRoleId) {
+    const rows = await TripPeopleRoleOption.findAll({
+      where: { tripPeopleRoleId },
+    });
+    selectedMap = new Map(rows.map((r) => [Number(r.tripTravelOptionId), !!r.selected]));
+  }
+  return options.map((option) => {
+    const json = option.toJSON();
+    return {
+      ...json,
+      selected: selectedMap.has(Number(json.id)) ? selectedMap.get(Number(json.id)) : false,
+    };
+  });
+};
+
+exports.findOne = async (req, res) => {
+  try {
+    const row = await TripPeopleRole.findByPk(req.params.id, { include: listIncludes });
+    if (!row) return res.status(404).send({ message: "Record not found." });
+    if (!(await canManageTripPeople(req, row.tripId)) && !(await canAccessTrip(req, row.tripId)).ok) {
+      return res.status(403).send({ message: "Forbidden." });
+    }
+
+    const travelOptions = await loadTravelOptionsForAssignment(row.tripId, row.id);
+    res.send({
+      ...row.toJSON(),
+      travelOptions,
+    });
   } catch (err) {
     res.status(500).send({ message: err.message });
   }

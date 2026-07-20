@@ -17,6 +17,7 @@ const handleTripImageUpload = (req, res, next) => {
 };
 
 router.get("/browse/orgs", [authenticate], tripBrowse.listBrowseOrgs);
+router.get("/browse/mine", [authenticate], tripBrowse.listMyTrips);
 router.get("/browse", [authenticate], tripBrowse.listActiveTrips);
 router.get("/browse/:id", [authenticate], tripBrowse.getBrowseTrip);
 router.post("/browse/:id/apply", [authenticate], tripBrowse.applyToTrip);

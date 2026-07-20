@@ -287,6 +287,52 @@ exports.listBrowseOrgs = async (req, res) => {
   }
 };
 
+exports.listMyTrips = async (req, res) => {
+  try {
+    const orgId = req.query.orgId;
+    if (!orgId) return res.status(400).send({ message: "orgId is required." });
+    if (!canBrowseOrg(req, orgId)) {
+      return res.status(403).send({ message: "Forbidden." });
+    }
+
+    const peopleId = req.user?.personId;
+    if (!peopleId) {
+      return res.send([]);
+    }
+
+    const links = await TripPeopleRole.findAll({
+      where: { peopleId },
+      attributes: ["id", "tripId", "status"],
+      include: [
+        {
+          model: Trip,
+          as: "trip",
+          where: { orgId },
+          required: true,
+          include: [orgInclude],
+        },
+      ],
+      order: [
+        [{ model: Trip, as: "trip" }, "startDate", "ASC"],
+        [{ model: Trip, as: "trip" }, "name", "ASC"],
+      ],
+    });
+
+    res.send(
+      links.map((link) => {
+        const trip = link.trip;
+        return {
+          ...trip.toJSON(),
+          alreadyApplied: true,
+          applicationStatus: link.status || null,
+        };
+      })
+    );
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+};
+
 exports.listActiveTrips = async (req, res) => {
   try {
     const orgId = req.query.orgId;
@@ -333,15 +379,19 @@ exports.listActiveTrips = async (req, res) => {
 exports.getBrowseTrip = async (req, res) => {
   try {
     const trip = await Trip.findByPk(req.params.id, { include: [orgInclude] });
-    if (!trip || trip.status !== "active") {
+    if (!trip) {
       return res.status(404).send({ message: "Trip not found." });
     }
     if (!canBrowseOrg(req, trip.orgId)) {
       return res.status(403).send({ message: "Forbidden." });
     }
 
-    const rolesNeeded = await loadTripRolesNeeded(trip.id);
     const assignment = await getPersonAssignment(trip.id, req.user?.personId);
+    if (trip.status !== "active" && !assignment) {
+      return res.status(404).send({ message: "Trip not found." });
+    }
+
+    const rolesNeeded = await loadTripRolesNeeded(trip.id);
     const participantAgreement = await loadOrganizationAgreement(trip.orgId);
     const travelOptions = await loadTravelOptionsForApplication(trip.id, assignment?.id);
 
